@@ -166,6 +166,8 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
             }
         }
     }
+    if(flag == OPEN_FLAG_READWRITE)
+        inodeno = parent_inodeno;
 
     if(flag == OPEN_FLAG_CREATE) //create file
     {
@@ -288,11 +290,8 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
 			fd = i;
 			break;
 		}
-        else if(flag == OPEN_FLAG_READWRITE && pFileDescTable->file[i].inodeNum == inodeno)
-        {free(inode); free(direct); return i;}
-
     }
-	if(flag == OPEN_FLAG_CREATE && fd != -1){
+	if(fd != -1){
 		pFileDescTable->file[i].inodeNum = inodeno;
 		pFileDescTable->file[i].fileOffset = 0;
 		pFileDescTable->file[i].bUsed = 1; //true
@@ -307,23 +306,52 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
 int		WriteFile(int fileDesc, char* pBuffer, int length)
 {
 	Inode* inode = (Inode*)calloc(1,sizeof(Inode));
-    int inodeno = pFileDescTable[fileDesc].inodeNum;
+    int inodeno = pFileDescTable->file[fileDesc].inodeNum;
     GetInode(inodeno, inode);
-    int blkno = GetFreeBlockBitmap();
-    SetBlockBitmap(blkno);
-
-    inode->dirBlockPtr[0] = blkno;
-    PutInode(inodeno, inode);
-
-    (pFileSysInfo->numAllocBlocks)++;
-    (pFileSysInfo->numFreeBlocks)--;
-    DevWriteBlock(0, pFileSysInfo);
-    pFileDescTable[fileDesc].fileOffset += BLOCK_SIZE;
-
+    int blkno,i,result,w;
     char *fileBlk = (char*)malloc(BLOCK_SIZE);
-    int result = strcpy(fileBlk, pBuffer);
-    DevWriteBlock(blkno, fileBlk);
-    
+    int *indirect = NULL;
+
+    for(i=0; i<length/BLOCK_SIZE; i++){
+        blkno = GetFreeBlockNum();
+        SetBlockBitmap(blkno);
+        if(inode->dirBlockPtr[0] == 0)
+            inode->dirBlockPtr[0] = blkno;
+        else if(inode->dirBlockPtr[1] == 0)
+            inode->dirBlockPtr[1] = blkno;
+        else if(inode->indirBlockPtr == 0)
+        { 
+            inode->indirBlockPtr = blkno;
+            indirect = (int*)calloc(16, 4);
+            indirect[0] = blkno;
+            DevWriteBlock(blkno, indirect);
+            blkno = GetFreeBlockNum();
+            SetBlockBitmap(blkno);
+            (pFileSysInfo->numAllocBlocks)++;
+            (pFileSysInfo->numFreeBlocks)--;
+        }
+        else
+        {
+            if(indirect == NULL) indirect = (int*)calloc(16, 4);
+            DevReadBlock(inode->indirBlockPtr, indirect);
+            for(w=1;w<16;w++)
+                if(indirect[w] == 0) {
+                    indirect[w] = blkno;
+                    break;}
+
+            DevWriteBlock(inode->indirBlockPtr, indirect);
+        }
+
+        PutInode(inodeno, inode);
+        (pFileSysInfo->numAllocBlocks)++;
+        (pFileSysInfo->numFreeBlocks)--;
+        memset(fileBlk, 0, BLOCK_SIZE);
+        result = strcpy(fileBlk, &pBuffer[BLOCK_SIZE*i]);
+        DevWriteBlock(blkno, fileBlk);
+    }
+    DevWriteBlock(0, pFileSysInfo);
+    pFileDescTable->file[fileDesc].fileOffset += length;
+
     return result;
 }
 
@@ -335,7 +363,9 @@ int		ReadFile(int fileDesc, char* pBuffer, int length)
 
 int		CloseFile(int fileDesc)
 {
-
+   pFileDescTable->file[fileDesc].bUsed = 0; 
+   pFileDescTable->file[fileDesc].fileOffset = 0;
+   pFileDescTable->file[fileDesc].inodeNum = 0;
 }
 
 int		RemoveFile(const char* szFileName)
