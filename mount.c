@@ -62,7 +62,7 @@ void		Mount(MountType type)
 
 void		Unmount(void)
 {
-	
+    DevCloseDisk();	
 	free(pFileSysInfo);
 }
 
