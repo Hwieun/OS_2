@@ -311,7 +311,8 @@ int		WriteFile(int fileDesc, char* pBuffer, int length)
     int blkno,i,result,w;
     char *fileBlk = (char*)malloc(BLOCK_SIZE);
     int *indirect = NULL;
-
+    int offset = pFileDescTable->file[fileDesc].fileOffset;
+   int blkno2; 
     for(i=0; i<length/BLOCK_SIZE; i++){
         blkno = GetFreeBlockNum();
         SetBlockBitmap(blkno);
@@ -323,12 +324,13 @@ int		WriteFile(int fileDesc, char* pBuffer, int length)
         { 
             inode->indirBlockPtr = blkno;
             indirect = (int*)calloc(16, 4);
-            indirect[0] = blkno;
+            blkno2 = GetFreeBlockNum();
+            SetBlockBitmap(blkno2);
+            indirect[0] = blkno2;
             DevWriteBlock(blkno, indirect);
-            blkno = GetFreeBlockNum();
-            SetBlockBitmap(blkno);
             (pFileSysInfo->numAllocBlocks)++;
             (pFileSysInfo->numFreeBlocks)--;
+            blkno = blkno2;
         }
         else
         {
@@ -346,18 +348,43 @@ int		WriteFile(int fileDesc, char* pBuffer, int length)
         (pFileSysInfo->numAllocBlocks)++;
         (pFileSysInfo->numFreeBlocks)--;
         memset(fileBlk, 0, BLOCK_SIZE);
-        result = strcpy(fileBlk, &pBuffer[BLOCK_SIZE*i]);
+        strcpy(fileBlk, &pBuffer[BLOCK_SIZE*i]);
         DevWriteBlock(blkno, fileBlk);
     }
     DevWriteBlock(0, pFileSysInfo);
-    pFileDescTable->file[fileDesc].fileOffset += length;
+    pFileDescTable->file[fileDesc].fileOffset = offset+length;
 
-    return result;
+    return length;
 }
 
 int		ReadFile(int fileDesc, char* pBuffer, int length)
 {
+    char *pBuf = (char*)malloc(BLOCK_SIZE);
+    Inode* inode = (Inode*)malloc(sizeof(Inode));
+    int* indirect = NULL;
+    int i;
+    int cursor = pFileDescTable->file[fileDesc].fileOffset;
+    int offset = cursor;
+    GetInode(pFileDescTable->file[fileDesc].inodeNum, inode);
 
+    for(i=0; i<length/BLOCK_SIZE; i++)
+    {
+        if(cursor < BLOCK_SIZE*2)
+            DevReadBlock(inode->dirBlockPtr[cursor/BLOCK_SIZE], pBuf);
+        else
+        {
+            if(indirect == NULL) {indirect = (int*)calloc(16,4); DevReadBlock(inode->indirBlockPtr, indirect);}
+            DevReadBlock(indirect[cursor/BLOCK_SIZE - 2], pBuf);
+        }
+        cursor += BLOCK_SIZE;
+        strcpy(&pBuffer[i*BLOCK_SIZE], pBuf);
+    }
+    pFileDescTable->file[fileDesc].fileOffset = offset + length;
+    
+    free(pBuf);
+    free(inode);
+    if(indirect != NULL) free(indirect);
+    return length;
 }
 
 

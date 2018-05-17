@@ -64,6 +64,7 @@ void		Unmount(void)
 {
     DevCloseDisk();	
 	free(pFileSysInfo);
+    free(pFileDescTable);
 }
 
 
