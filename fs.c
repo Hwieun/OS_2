@@ -175,6 +175,7 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
         DevReadBlock(inode->dirBlockPtr[0], (char*)direct);
         inodeno = GetFreeInodeNum();
         SetInodeBitmap(inodeno);
+        inode->size +=BLOCK_SIZE;
         for(i=0;i<4;i++)
         {
             printf("check  %s\n", direct[i].name);
@@ -196,7 +197,6 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
                 direct[0].inodeNum = inodeno;
                 DevWriteBlock(bf, direct); //new dir entry block
                 inode->dirBlockPtr[1] = bf;
-                PutInode(parent_inodeno, inode);
             }
             else 
             {
@@ -228,7 +228,6 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
                         strcpy(direct[0].name, dirname[path_num-1]);
                         direct[0].inodeNum = inodeno;
                         DevWriteBlock(bf, direct);
-                        PutInode(parent_inodeno, inode);
                     }
                     else{
                         memset(direct, 0, BLOCK_SIZE);
@@ -269,6 +268,7 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
             }
         }
 
+        PutInode(parent_inodeno, inode);
         /*add file inode*/
         GetInode(inodeno, inode);
         inode->size = 0;
@@ -344,6 +344,7 @@ int		WriteFile(int fileDesc, char* pBuffer, int length)
             DevWriteBlock(inode->indirBlockPtr, indirect);
         }
 
+        inode->size +=BLOCK_SIZE;
         PutInode(inodeno, inode);
         (pFileSysInfo->numAllocBlocks)++;
         (pFileSysInfo->numFreeBlocks)--;
@@ -466,7 +467,7 @@ int		RemoveFile(const char* szFileName)
     if(flag == 0) return -1; //don't find file
 
     /*reset dir entry*/
-    if(indexno == 0 && strcmp(direct[0].name, ".")) //"."가 아니고 인덱스 번호가 0번일때
+/*    if(indexno == 0 && strcmp(direct[0].name, ".") && direct[1].name[0] == 0) //"."가 아니고 인덱스 번호가 0번일때
     {
         ResetBlockBitmap(blkno);
         if(indirect != NULL){
@@ -475,7 +476,6 @@ int		RemoveFile(const char* szFileName)
                 DevWriteBlock(inode->indirBlockPtr, indirect);
                 ResetBlockBitmap(inode->indirBlockPtr);
                 inode->indirBlockPtr = 0;
-                PutInode(parent_inodeno, inode);
             }
             else{
                 indirect[w] = 0;
@@ -484,12 +484,13 @@ int		RemoveFile(const char* szFileName)
         else if(inode->dirBlockPtr[1] == parent_inodeno)
         {
             inode->dirBlockPtr[1]=0;
-            PutInode(parent_inodeno, inode);
         }
-    }
+    } */
+    inode->size -= BLOCK_SIZE;
     strcpy(direct[indexno].name, "");
     direct[indexno].inodeNum = 0;
     DevWriteBlock(blkno, direct);
+    PutInode(parent_inodeno, inode);
 
     /*remove file block*/
     GetInode(my_inodeno, inode);
@@ -741,7 +742,7 @@ int		MakeDir(const char* szDirName)
     memset(inode, 0, sizeof(Inode));
     inode->type = FILE_TYPE_DIR; //enum
     inode->dirBlockPtr[0] = blkno;
-    inode->size = BLOCK_SIZE;
+    inode->size = BLOCK_SIZE*2;
     PutInode(inodeno, inode);
 
     memset(inode, 0, sizeof(Inode));
@@ -839,7 +840,6 @@ int		RemoveDir(const char* szDirName)
                 DevWriteBlock(inode->indirBlockPtr, indirect);
                 ResetBlockBitmap(inode->indirBlockPtr);
                 inode->indirBlockPtr = 0;
-                PutInode(parent_inodeno, inode);
             }
             else{
                 indirect[w] = 0;
@@ -848,12 +848,13 @@ int		RemoveDir(const char* szDirName)
         else if(inode->dirBlockPtr[1] == parent_inodeno)
         {
             inode->dirBlockPtr[1]=0;
-            PutInode(parent_inodeno, inode);
         }
     }
     strcpy(direct[indexno].name, "");
     direct[indexno].inodeNum = 0;
     DevWriteBlock(blkno, direct);
+    inode->size -= BLOCK_SIZE;
+    PutInode(parent_inodeno, inode);
 
     /*remove*/ //i = 상위 안의 dir entry index
     GetInode(my_inodeno, inode);
@@ -961,18 +962,28 @@ int		EnumerateDirStatus(const char* szDirName, DirEntryInfo* pDirEntry, int dirE
                 DevReadBlock(indirect[(i-8)/4],direct);
             }
         }
-        if(direct[i%4].name[0] == 0 && inodesize <= 0) 
+        if(direct[i%4].name[0] == 0) 
         {
-            free(inode);free(direct);
-            return i;
-        }		
+            if(inodesize <= 0){
+                free(inode);free(direct);
+                if(indirect != NULL) free(indirect);
+                return i;}
+            else
+            {
+                char* namebf = (char*)calloc(MAX_NAME_LEN, 1);
+                strcpy(pDirEntry[i].name, namebf);
+                free(namebf);
+            }
+        }
+        else {
+            strcpy(pDirEntry[i].name, direct[i%4].name);
+            inodesize -= BLOCK_SIZE;
+        }
         Inode* bf = (Inode*)calloc(1,sizeof(Inode));
-        strcpy(pDirEntry[i].name, direct[i%4].name);
         pDirEntry[i].inodeNum = direct[i%4].inodeNum;
         GetInode(pDirEntry[i].inodeNum, bf);
         pDirEntry[i].type = bf->type;
         free(bf);
-        inodesize -= BLOCK_SIZE;
     }
 
     if(indirect != NULL) free(indirect);
