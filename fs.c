@@ -178,7 +178,7 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
         inode->size +=BLOCK_SIZE;
         for(i=0;i<4;i++)
         {
-            printf("check  %s\n", direct[i].name);
+  //          printf("check  %s\n", direct[i].name);
             if(direct[i].name[0] == 0)
             {
                 strcpy(direct[i].name, dirname[path_num-1]);
@@ -192,7 +192,7 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
             if(inode->dirBlockPtr[1] == 0){
                 int bf = GetFreeBlockNum();
                 SetBlockBitmap(bf);
-                printf("dirBlock 1 num : %d\n", bf);
+      //          printf("dirBlock 1 num : %d\n", bf);
                 strcpy(direct[0].name, dirname[path_num-1]);
                 direct[0].inodeNum = inodeno;
                 DevWriteBlock(bf, direct); //new dir entry block
@@ -203,7 +203,7 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
                 DevReadBlock(inode->dirBlockPtr[1], direct);
                 for(i=0;i<4;i++)
                 {
-                    printf("check 2 %s\n", direct[i].name);
+     //               printf("check 2 %s\n", direct[i].name);
                     if(direct[i].name[0] == 0){
                         strcpy(direct[i].name, dirname[path_num-1]);
                         direct[i].inodeNum = inodeno;
@@ -218,11 +218,11 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
                         memset(direct, 0, BLOCK_SIZE);
                         int bf = GetFreeBlockNum(); //indirect
                         SetBlockBitmap(bf);
-                        printf("indirect num : %d\n", bf);
+         //               printf("indirect num : %d\n", bf);
                         inode->indirBlockPtr= bf;
                         bf = GetFreeBlockNum(); //next dir entry block
                         SetBlockBitmap(bf);
-                        printf("indirect index block num : %d\n", bf);
+         //               printf("indirect index block num : %d\n", bf);
                         indirect[0] = bf;
                         DevWriteBlock(inode->indirBlockPtr, indirect);
                         strcpy(direct[0].name, dirname[path_num-1]);
@@ -241,7 +241,7 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
                             DevReadBlock(indirect[k], direct);
                             for(i=0;i<4;i++)
                             {
-                                printf("check %d %s\n",k+3, direct[i].name);
+                               // printf("check %d %s\n",k+3, direct[i].name);
                                 if(direct[i].name[0] == 0){
                                     strcpy(direct[i].name, dirname[path_num-1]);
                                     direct[i].inodeNum = inodeno;
@@ -254,7 +254,7 @@ int		OpenFile(const char* szFileName, OpenFlag flag)
                         {
                             int bf = GetFreeBlockNum();
                             SetBlockBitmap(bf);
-                            printf("indirect index blk num : %d, k:%d\n", bf,k);
+                            //printf("indirect index blk num : %d, k:%d\n", bf,k);
                             indirect[k] = bf;
                             DevWriteBlock(inode->indirBlockPtr, indirect);
 

@@ -25,7 +25,7 @@ void		Mount(MountType type)
 	int inodeno = GetFreeInodeNum();
     printf("inode:%d, blockno :%d\n", inodeno, blockno);
     strcpy(alloc[0].name, ".");
-    printf("set root direntry name at mount : %s\n", alloc[0].name);
+   printf("set root direntry name at mount : %s\n", alloc[0].name);
 	alloc[0].inodeNum = inodeno;
 	DevWriteBlock(blockno, alloc); //19
 	
@@ -66,5 +66,3 @@ void		Unmount(void)
 	free(pFileSysInfo);
     free(pFileDescTable);
 }
-
-
